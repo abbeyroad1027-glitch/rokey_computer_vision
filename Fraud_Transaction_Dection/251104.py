@@ -51,8 +51,8 @@ print("fraud_transaction(1): ", counts[1])
 X_train, X_test, y_train, y_test =\
 train_test_split(X,y, test_size=0.2, stratify=y, random_state=42)
 
-print(f"fraud ratio in training data: {y_train_sum()/len(y_train)*100: .2f}%"  )
-print(f"fraud ratio in test data: {y_test_sum()/len(y_test)*100: .2f}%"  )
+print(f"fraud ratio in training data: {y_train.sum()/len(y_train)*100: .2f}%"  )
+print(f"fraud ratio in test data: {y_test.sum()/len(y_test)*100: .2f}%"  )
 
 # Standardization
 # (x-x.mean)/std
@@ -65,3 +65,13 @@ print(f"Raw Data Range:[{X_train.min():.2f}, {X_train.max():.2f}]")
 print(f"Standardization range:[{X_train_scaled.min():.2f}, {X_train_scaled.max():.2f}]")
 print(f"Mean after Standardization:[{X_train_scaled.mean():.2f}]")
 print(f"Standard deviation after standardization :[{X_train_scaled.std():.2f}]")
+
+# Pytorch Tensor Conversion
+X_train_tensor = torch.FloatTensor(X_train_scaled) # Number of samples, Number of features
+y_train_tensor = torch.FloatTensor(y_train).view(-1,1)
+
+X_test_tensor = torch.FloatTensor(X_test_scaled)
+y_test_tensor = torch.FloatTensor(y_test).view(-1,1)
+
+print(X_train_tensor.shape, y_train_tensor.shape)
+print(X_test_tensor.shape, y_test_tensor.shape)
