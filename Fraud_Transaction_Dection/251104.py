@@ -46,7 +46,22 @@ print("normal_transaction(0): ", counts[0])
 print("fraud_transaction(1): ", counts[1])
 
 # Data Split (Stratified Sampling)
+# Stratified Option >> maintains clss ratio between train and test sets
 
 X_train, X_test, y_train, y_test =\
 train_test_split(X,y, test_size=0.2, stratify=y, random_state=42)
 
+print(f"fraud ratio in training data: {y_train_sum()/len(y_train)*100: .2f}%"  )
+print(f"fraud ratio in test data: {y_test_sum()/len(y_test)*100: .2f}%"  )
+
+# Standardization
+# (x-x.mean)/std
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train) # Training data
+X_test_scaled = scaler.transform(X_test) # Test data
+# hold out
+
+print(f"Raw Data Range:[{X_train.min():.2f}, {X_train.max():.2f}]")
+print(f"Standardization range:[{X_train_scaled.min():.2f}, {X_train_scaled.max():.2f}]")
+print(f"Mean after Standardization:[{X_train_scaled.mean():.2f}]")
+print(f"Standard deviation after standardization :[{X_train_scaled.std():.2f}]")
