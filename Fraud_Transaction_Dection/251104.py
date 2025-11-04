@@ -75,3 +75,19 @@ y_test_tensor = torch.FloatTensor(y_test).view(-1,1)
 
 print(X_train_tensor.shape, y_train_tensor.shape)
 print(X_test_tensor.shape, y_test_tensor.shape)
+
+# Model Definition
+# Create a 3-layer Neural Network Model 
+class FraudDetectionModel(nn.Module):
+    def __init__(self, input_dim):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, 16)
+        self.fc2 = nn.Linear(16, 8)
+        self.fc3 = nn.Linear(8, 1)
+        self.relu = nn.ReLU()
+    
+    def forward(self, x):
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
