@@ -139,20 +139,23 @@ class TemperatureScaling(nn.Module): # It can controll sharpness of probalilty
 # 4. Confusion Matrix Visualization
 
 # ---------------------------------------------------------
-def plot_confusion_matrix_with_analysis(y_true, y_pred, class_names):
-    cm = confusion_matrix(y_true, y_pred)
+def plot_confusion_matrix_with_analysis(y_true, y_pred, class_names): # y이고 , y 헷이겠지
+    cm = confusion_matrix(y_true, y_pred) # sklearn에 있어.
 
-    fig, axes = plt.subplots(1, 2, figsize = (15,5))
+    fig, axes = plt.subplots(1, 2, figsize = (15,5)) # 왼쪽;혼동행렬히트맵, 오른쪽:상위오류(barh)
 
     # confusion matrix
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                 xticklabels=class_names, yticklabels=class_names,
-                ax=axes[0])
+                ax=axes[0]) # axes[0]으로 하면 왼쪽 서브플롯에 그림
     axes[0].set_title("Confusion Matrix", fontsize=14, pad=10)
     axes[0].set_ylabel('actual class', fontsize=11)
-    axes[0].set_title('predicted class', fontsize=11)
+    axes[0].set_xlabel('predicted class', fontsize=11)
 
-    # Error Analysis
+    # Error Analysis 
+    # 실제 클래스(행)기준으로 비율을 만들기 위해 정규화
+    # i행의 합으로 나눠 실제 i에서 j로 간 비율(오류율)
+    # 0 으로 나눔 방지
     cm_normalized = cm.astype('float') / (cm.sum(axis=1)[:, np.newaxis] + 1e-10)
 
     error_analysis = []
@@ -166,7 +169,7 @@ def plot_confusion_matrix_with_analysis(y_true, y_pred, class_names):
                     'Rate': cm_normalized[i,j] 
                 }) 
 
-    if len(error_analysis) > 0:
+    if len(error_analysis) > 0: # 오분류가 있다면
         error_analysis.sort(key=lambda x: x['Rate'], reverse=True)
         top_errors = error_analysis[:min(5, len(error_analysis))]
         error_labels = [f"{e['True']}→{e['Pred']}" for e in top_errors]
@@ -176,7 +179,7 @@ def plot_confusion_matrix_with_analysis(y_true, y_pred, class_names):
         axes[1].barh('error rate(%)',fontsize=11)
         axes[1].barh('main types of error', fontsize=14, pad=10)
         axes[1].barh(axis='x', alpha=0.3)
-    else:
+    else: # 오분류가 없다면
         axes[1].text(0.5, 0.5, 'Perfect Classification',
                      transform=axes[1].transAxes, ha='center', va='center',
                      fontsize=16)
@@ -186,3 +189,37 @@ def plot_confusion_matrix_with_analysis(y_true, y_pred, class_names):
     plt.show()
 
     return cm
+
+# --------------------------------------------------------
+
+# 4. Calculate Detailed Metrics
+
+# ---------------------------------------------------------
+def calculate_detailed_metrics(y_true, y_pred, y_proba, class_names):
+    precision, recall, f1, support = precision_recall_fscore_support(
+        y_true, y_pred, average=None, zero_division=0
+    )
+
+    metrics_avg = {
+        'macro': precision_recall_fscore_support(y_true, y_pred, average='macro', zero_division=0)[:3],
+        'micro': precision_recall_fscore_support(y_true, y_pred, average='micro', zero_division=0)[:3],
+        'weighted': precision_recall_fscore_support(y_true, y_pred, average='weighted', zero_division=0)[:3],
+    }
+
+    fig, axes = plt.subplots(2, 2, figsize=(15,10))
+
+    # (1) 클래스별 지표
+    x = np.arange(len(class_names))
+    width = 0.25
+
+    axes[0, 0].bar(x - width, precision, width, label='Precision', alpha=0.8)
+    axes[0, 0].bar(x, recall, width, label='Recall', alpha=0.8)
+    axes[0, 0].bar(x + width, f1, label='F1-Score', alpha=0.8)
+    axes[0, 0].set_xlabel('class', fontsize=11)
+    axes[0, 0].set_ylabel('score', fontsize=11)
+    axes[0, 0].set_title('calculate detailed metrics', fontsize=13, pad=10)
+    axes[0, 0].set_xticks(x)
+    axes[0, 0].set_xticklabels(class_names)
+    axes[0, 0].legend()
+    axes[0, 0].grid(axis='y', alpha=0.3)
+    axes[0, 0].set_ylim([0, 1.1])
