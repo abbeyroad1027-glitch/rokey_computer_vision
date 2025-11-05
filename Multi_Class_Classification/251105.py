@@ -26,7 +26,10 @@ from collections import Counter
 torch.manual_seed(42)
 np.random.seed(42)
 
+#-------------------------------------------------------
+
 # 1. Imbalance Dataset
+
 #----------------------------------------------------------
 class ImbalanceDataset(Dataset):
     def __init__(self, n_samples=2000, n_features=20, n_classes=4,
@@ -60,23 +63,73 @@ class ImbalanceDataset(Dataset):
 
     def __getitem__(self, idx):             # 쌍으로 반환한다. (feature, label)
         return self.X[idx], self.y[idx]
+
+#--------------------------------------------------------------
     
  # 2. Model Definition
- #-------------------------------------------------------
-class MulitClassClassifier(nn.Module):
+
+#---------------------------------------------------------------
+class MulitClassClassifier(nn.Module): # FeddForward Neural Network MLP
     def __init__(self, input_dim=20, hidden_dim=64, n_classes=4):
         super().__init__()
         self.network = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(0.3),
+
+            nn.BatchNorm1d(hidden_dim),     # stabilize training, improve convergence
+            nn.ReLU(),                      # non-linear activation function
+            nn.Dropout(0.3),                # prevent overfitting 
+
             nn.Linear(hidden_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(hidden_dim, n_classes)
-        )
+
+            nn.Linear(hidden_dim, n_classes) # n_classes : multiclass classification
+        )                                    # logit(로짓) 은 “확률로 가기 전의 값”, logit -> softmax -> probability
+                                             # 즉 Softmax나 Sigmoid를 통과하기 전의 원본 출력값. 
+                                             # Logit is the raw, unnormalized output of a neural network before applying Softmax or Sigmoid.
 
     def forward(self, x):
         return self.network(x)
+    
+#------------------------------------------------------------
+
+# 3. Temperature Scaling
+
+#-------------------------------------------------------------
+class TemperatureScaling(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.temperature = nn.Parameter(torch.ones(1) * 1.5)
+
+    def forward(self, logits):
+        return logits / self.temperature # logit/T
+    
+    def calibrate(self, model, val_loader, device, max_iter=50):
+        nll_criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.LBFGS([self.temperature], lr=0.01, max_iter=max_iter)
+
+        logits_list = []
+        labels_list = []
+
+        model.eval()
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                logits = model(inputs)
+                logits_list.append(logits)
+                labels_list.append(labels)
+        
+        logtis = torch.cat(logits_list)
+        labels = torch.cat(labels_list)
+
+        def eval_loss():
+            optimizer.zero_grad()
+            loss = nll_criterion(self.forward(logits), labels)
+            loss.backward()
+            return loss
+        
+        optimizer.step(eval_loss)
+
+        print(f"Temperature Scaling Completed : T = {self.temperature.item():.3f}")
+        return self.temperature.item()
