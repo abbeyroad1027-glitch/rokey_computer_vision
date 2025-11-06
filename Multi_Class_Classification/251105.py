@@ -427,9 +427,11 @@ class AugmentedWrapper(Dataset):
             noise = torch.randn_like(x) * self.noise_std
             return x + noise, y
         
-# ===================================================================
+# --------------------------------------------------------
+
 # 8. Training and Evaluation
-# ===================================================================
+
+# --------------------------------------------------------
 def train_model(model, train_loader, criterion, optimizer, device, epochs=30):
     model.train()
     for epoch in range(epochs):
@@ -468,9 +470,11 @@ def evaluate_model(model, test_loader, device):
 
     return np.array(all_labels), np.array(all_preds), np.array(all_probs)
 
-# ===================================================================
+# ------------------------------------------------------------
+
 # 9. Main Execution
-# ===================================================================
+
+# -----------------------------------------------------------
 def main():
     print("="*70)
     print("10th: Advanced Evaluation Metrics and Class Imbalance Handling")
@@ -496,9 +500,11 @@ def main():
     class_names = ['Class 0', 'Class 1', 'Class 2', 'Class 3']
     test_loader = DataLoader(test_dataset, batch_size=64, shuggle=True)
 
-    # ===============================================================
+    # ------------------------------------------------------------
+
     # Method 1: Weighted Loss
-    # ===============================================================
+
+    # ---------------------------------------------------------------
 
     print("\n" + "="*70)
     print("Method 1 : Weight Loss")
@@ -524,8 +530,151 @@ def main():
     calculate_detailed_metrics(y_true, y_pred, y_proba, class_names)
 
     print("\n3. ROC-AUC")
-    plot_roc_curbes_multiclass(y_ture, y_proba, class_names)
+    plot_roc_curbes_multiclass(y_true, y_proba, class_names)
 
-    # ===============================================================
-    # 방법 2: Oversampling
-    # ===============================================================
+    # --------------------------------------------------------
+
+    # Method 2: Oversampling
+
+    # ------------------------------------------------------
+    print("\n" + "="*70)
+    print("Method 2: Oversampling")
+    print("="*70)
+
+    # Generate sampler after collecting labels from the regular loader
+    temp_loader = DataLoader(train_dataset, batch_size=64, shuffle=False) #Temporary Dataloader 임시 데이터로더
+    sampler = create_weigthed_sampler(temp_loader)
+    train_loader_oversampled = DataLoader(train_dataset, batch_size=64, sampler=sampler)
+
+    model2 = MulitClassClassifier(20, 64, 4).to(device)
+    criterion_normal = nn.CrossEntropyLoss()
+    optimizer2 = torch.optim.Adam(model2.parameters(), lr=0.001)
+
+    print("\n[Start Training]")
+    train_model(model2, train_loader_oversampled, criterion_normal, optimizer2, device, 30)
+
+    print("\n[Evalution]")
+    y_true2, y_pred2, y_proba2 = evaluate_model(model2, test_loader, device)
+
+    print("\nConfusion Matrix")
+    plot_confusion_matrix_with_analysis(y_true2, y_pred2, class_names)
+    # Why? shuffle=False
+    # That's because training objest is not shuffling order of data but collecting data obviously.
+    # --------------------------------------------------------------
+    
+    # Method 3: Data Augmentation
+
+    # ---------------------------------------------------------------
+    print("\n" + "="*70)
+    print("Method 3: Data Augmentation")
+    print("="*70)
+
+    augmented_dataset = AugmentedWrapper(train_dataset, augment_ratio=0.5, noise_std=0.15)
+    train_loader_augmented = DataLoader(augmented_dataset, batch_size=64, shuffle=True)
+
+    model3 = MulitClassClassifier(20, 64, 4).to(device)
+    optimizer3 = torch.optim.Adam(model3.parameters(), lr=0.001)
+
+    print(f"\n Data size after augmentation: {len(augmented_dataset)} (raw dataset)")
+    print("\n[Start Training]")
+    train_model(model3, train_loader_augmented, criterion_normal, optimizer3, device, 30)
+
+    print("\n[Evaluation]")
+    y_true3, y_pred3, y_proba3 = evaluate_model(model3, test_loader, device)
+
+    print("\nConfusion Matrix")
+    plot_confusion_matrix_with_analysis(y_true3, y_pred3, class_names)
+
+    # ----------------------------------------------------------------
+
+    # Method 4: Temperature Scaling
+
+    # -------------------------------------------------------------------
+    print("\n" + "="*70)
+    print("4. Temperature Scaling")
+    print("="*70)
+
+    temp_scaler = TemperatureScaling().to(device)
+    temperature = temp_scaler.calibrate(model1, test_loader, device)
+
+    model1.eval()
+    all_probs_before = []
+    all_probs_after = []
+
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            inputs = inputs.to(device)
+            logtis = model1(inputs)
+
+            probs_before = F.softmax(logtis, dim=1)
+            probs_after = F.softmax(temp_scaler(logtis), dim=1)
+
+            all_probs_before.extend(probs_before.cpu().numpy().tolist())
+            all_probs_after.extend(probs_after.cpu().numpy().tolist())
+
+    all_probs_before = np.array(all_probs_before)
+    all_probs_after = np.array(all_probs_after)
+
+    fig, axes = plt.subplots(1, 2, figsize=(15, 5))
+
+    max_probs_before = all_probs_before.max(axis=1)
+    max_probs_after = all_probs_after.max(axis=1)
+
+    axes[0].hist(max_probs_before, bins=20, alpha=0.7, edgecolor='black')
+    axes[0].set_xlabel('Maximum Probability', fontsize=11)
+    axes[0].set_ylabel('Frequency', fontsize=11)
+    axes[0].set_title(f"Before calibration (mean: {max_probs_before.mean():.3f}), fontsize=13")
+    axes[0].grid(axis='y', alpha=0.3)
+
+    axes[1].hist(max_probs_after, bins=20, alpha=0.7, edgecolor='black', color='orange')
+    axes[1].set_xlabel('Maximum Probability', fontsize=11)
+    axes[1].set_ylabel('Frequency', fontsize=11)
+    axes[1].set_title(f"After calibration (mean: {max_probs_after.mean():.3f}, T={temperature:.3f}, fontsize=13)")
+    axes[1].grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+    # ------------------------------------------------------------
+
+    # Method5 : Method Comparison
+
+    # --------------------------------------------------------------
+    print("\n" + "="*70)
+    print("5. Method Comparison")
+    print("="*70)
+
+    _, _, f1_1, _ = precision_recall_fscore_support(y_true, y_pred, average='macro', zero_division=0)
+    _, _, f1_2, _ = precision_recall_fscore_support(y_true2, y_pred2, average='macro', zero_division=0)
+    _, _, f1_3, _ = precision_recall_fscore_support(y_true3, y_pred3, average='macro', zero_division=0)
+
+    methods = ["Weighted Loss", "Oversampling", "Augmentation"]
+    scores = [f1_1,f1_2, f1_3]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars = ax.bar(methods, scores, color=['skyblue', 'lightcoral', 'lightgreen'],
+                  edgecolor='black', alpha=0.8)
+    
+    for bar, score in zip(bars, scores):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2, height,
+                f'{score:.4f}', ha='center', va='bottom', fontsize=12, fontweight='bold')
+        
+    ax.set_ylabel("Macro F1-Score", fontsiz=12)
+    ax.set_title("Performance by Imbalance Handling Method", fontsize=14, pad=15)
+    ax.set_ylim([0, max(scores) * 1.2])
+    ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+    print("\nFinal Comparison")
+    for method, score in zip(methods, scores):
+        print(f"  {method:20s}: {score:.4f}")
+
+    print("\n" + "="*70)
+    print("Lecture Finished")
+    print("="*70)
+
+if __name__=="__main__":
+    main()
