@@ -288,3 +288,119 @@ def calculate_detailed_metrics(y_true, y_pred, y_proba, class_names): # proba : 
     return metrics_avg
 
 #064617
+
+# --------------------------------------------------------
+
+# 6. ROC - AUC
+
+# ---------------------------------------------------------
+def plot_roc_curbes_multiclass(y_true, y_proba, class_names):
+    n_classes = len(class_names)
+    y_true_bin = label_binarize(y_true, classes=range(n_classes))
+
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
+
+    for i in range(n_classes):
+        fpr[i], tpr[i], _ = roc_curve(y_true_bin[:, i], y_proba[:, i])
+        roc_auc[i] = auc(fpr[i], tpr[i])
+    
+    fpr["micro"], tpr["micro"], _ = roc_curve(y_true_bin.ravel(), y_proba.ravel())
+    roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
+
+    all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
+    mean_tpr = np.zeros_like(all_fpr)
+    for i in range(n_classes):
+        mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
+    mean_tpr /= n_classes
+    fpr["macro"] = all_fpr
+    tpr["macro"] = mean_tpr
+    roc_auc["macro"] = auc(fpr["macro"], tpr["macro"])
+
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+
+    # ROC per class
+    colors = plt.cm.Set3(np.linspace(0, 1, n_classes))
+    for i, color in enumerate(colors):
+        axes[0].plot(fpr[i], tpr[i], color=color, lw=2,
+                     label=f"{class_names[i]} (AUC={roc_auc[i]:.3f})")
+        
+    axes[0].plot([0,1], [0,1], 'k--', lw=1, label='Random')
+    axes[0].set_xlim([0.0, 1.0])
+    axes[0].set_ylim([0.0, 1.05])
+    axes[0].set_xlabel('False Positibe Rate', fontsize=11)
+    axes[0].set_ylabel('True Positibe Rate', fontsize=11)
+    axes[0].set_title('ROC per class (One-vs-Rest)', fontsize=13, pad=10)
+    axes[0].legend(loc='lower right', fontsize=9)
+    axes[0].grid(alpha=0.3)
+
+    # Macro/Micro
+    axes[1].plot(fpr["micro"], tpr["micro"],
+                label=f'Micro-avg (AUC={roc_auc["micro"]:.3f})',
+                color='deeppink', linestyle=':',linewidth=3)
+    axes[1].plot(fpr["macro"], tpr["macro"],
+                label=f"Macro-avg (AUC={roc_auc["macro"]:.3f})",
+                color='navy', linestyle=':',linewidth=3)
+    axes[1].plot([0, 1], [0, 1], 'k--', lw=1, label='Random')
+
+    axes[1].set_xlim([0.0, 1.0])
+    axes[1].set_ylim([0.0, 1.05])
+    axes[1].set_xlabel('False Positive Rate', fontsize=11)
+    axes[1].set_ylabel('True Positive Rate', fontsize=11)
+    axes[1].set_title('Average ROC', fontsize=13, pad=10)
+    axes[1].legend(loc="lower right", fontsize=10)
+
+    plt.tight_layout()
+    plt.show()
+
+    print("\n" + '='*60)
+    print("ROC-AUC score")
+    print("="*60)
+    for i, name in enumerate(class_names):
+        print(f"{name:15s}: {roc_auc[i]:.4f}")
+    print(f"{'Micro-avg':15s}: {roc_auc['micro']:.4f}")
+    print(f"{'Macro-avg':15s}: {roc_auc['macro']:.4f}")
+          
+    return roc_auc
+
+# --------------------------------------------------------
+
+# 7. Utility Functions (IndexError Fixed)
+
+# ---------------------------------------------------------
+def get_labels_from_loader(loader):
+    # Extract all labels from Dataloader
+    labels = []
+    for _, batch_labels in loader:
+        labels.extend(batch_labels.numpy().tolist())
+    return labels
+
+def get_class_weights(train_loader, n_classes):
+    # Class weight calculation
+    labels = get_labels_from_loader(train_loader)
+    class_counts = Counter(labels)
+    n_samples = len(labels)
+
+    weights = torch.FloatTensor([
+        n_samples / (n_classes * class_counts.get(i, 1))
+        for i in range(n_classes)
+    ])
+
+    print(f"\n Class distribution in training data: {dict(sorted(class_counts.items()))}")
+    print(f"Class Weight: {weights.numpy()}")
+    return weights
+
+def create_weigthed_sampler(train_loader):
+    """Sampler for Oversampling""" 
+    labels = get_labels_from_loader(train_loader)
+    class_counts = Counter(labels)
+
+    sample_weights = [1.0 / class_counts[label] for label in labels]
+    sampler = WeightedRandomSampler(
+        weights=sample_weights,
+        num_samples=len(sample_weights),
+        replacement=True
+    )
+    
+    return sampler
