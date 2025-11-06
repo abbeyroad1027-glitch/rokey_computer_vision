@@ -467,3 +467,65 @@ def evaluate_model(model, test_loader, device):
             all_probs.extend(probs.cpu().numpy().tolist())
 
     return np.array(all_labels), np.array(all_preds), np.array(all_probs)
+
+# ===================================================================
+# 9. Main Execution
+# ===================================================================
+def main():
+    print("="*70)
+    print("10th: Advanced Evaluation Metrics and Class Imbalance Handling")
+    print("="*70)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"\ndevice: {device}")
+
+    # Data Generation
+    full_dataset = ImbalanceDataset(
+        n_samples=2000, n_features=20, n_classes=4,
+        imbalance_ratio=[0.5, 0.3, 0.15, 0.05]
+    )
+
+    # Distribution
+    train_size = int(0.7 * len(full_dataset))
+    test_size = len(full_dataset) - train_size
+    train_dataset, test_dataset = torch.utils.data.random_split(
+        full_dataset, [train_size, test_size],
+        generator=torch.Generator().manual_seed(42)
+    )
+
+    class_names = ['Class 0', 'Class 1', 'Class 2', 'Class 3']
+    test_loader = DataLoader(test_dataset, batch_size=64, shuggle=True)
+
+    # ===============================================================
+    # Method 1: Weighted Loss
+    # ===============================================================
+
+    print("\n" + "="*70)
+    print("Method 1 : Weight Loss")
+    print("="*70)
+
+    train_loader_normal = DataLoader(train_dataset, batch_size=64, shuffle=True)
+    class_weights = get_class_weights(train_loader_normal, n_classes=4).to(device)
+
+    model1 = MulitClassClassifier(20, 64, 4).to(device)
+    criterion_weighted = nn.CrossEntropyLoss(weight=class_weights)
+    optimizer1 = torch.optim.Adam(model1.parameters(), lr=0.001)
+
+    print("\n[Start Training]")
+    train_model(model1, train_loader_normal, criterion_weighted, optimizer1, device, 30)
+
+    print("\n[Evaluation]")
+    y_true, y_pred, y_proba = evaluate_model(model1, test_loader, device)
+
+    print("\n1. Confustion Matrix")
+    plot_confusion_matrix_with_analysis(y_true, y_pred, class_names)
+
+    print("\n2. Detailed Metrics")
+    calculate_detailed_metrics(y_true, y_pred, y_proba, class_names)
+
+    print("\n3. ROC-AUC")
+    plot_roc_curbes_multiclass(y_ture, y_proba, class_names)
+
+    # ===============================================================
+    # 방법 2: Oversampling
+    # ===============================================================
