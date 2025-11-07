@@ -47,3 +47,4 @@ class CNN_v3(nn.Module):
         x2 = self.flatten(x1)
         x3 = self.classifier(x2)
         return x3
+    
